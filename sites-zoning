@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset='utf-8' />
+    <title></title>
+    <meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.0/jquery.min.js"></script>
+    <script src="https://api.mapbox.com/mapbox-gl-js/v1.9.1/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v1.9.1/mapbox-gl.css" rel="stylesheet" />
+    <script src='https://npmcdn.com/csv2geojson@latest/csv2geojson.js'></script>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      #map {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 100%;
+      }
+
+    </style>
+  </head>
+
+  <body>
+
+
+    //toggle
+    <style>
+      #menu {
+        background: #fff;
+        position: absolute;
+        z-index: 1;
+        top: 10px;
+        left: 10px;
+        border-radius: 3px;
+        width: 120px;
+        border: 1px solid rgba(0, 0, 0, 0.4);
+        font-family: 'Open Sans', sans-serif;
+      }
+
+      #menu a {
+        font-size: 13px;
+        color: #404040;
+        display: block;
+        margin: 0;
+        padding: 0;
+        padding: 10px;
+        text-decoration: none;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.25);
+        text-align: center;
+      }
+
+      #menu a:last-child {
+        border: none;
+      }
+
+      #menu a:hover {
+        background-color: #f8f8f8;
+        color: #404040;
+      }
+
+      #menu a.active {
+        background-color: #3887be;
+        color: #ffffff;
+      }
+
+      #menu a.active:hover {
+        background: #3074a4;
+      }
+
+    </style>
+
+
+    //toggle
+    <nav id="menu"></nav>
+
+    <div id='map'></div>
+    <script>
+      mapboxgl.accessToken = 'pk.eyJ1IjoiZGFuc3dpY2siLCJhIjoiY2l1dTUzcmgxMDJ0djJ0b2VhY2sxNXBiMyJ9.25Qs4HNEkHubd4_Awbd8Og';
+      var map = new mapboxgl.Map({
+        container: 'map', // container id
+        style: 'mapbox://styles/pipelinenow/ckawn1pg20n801iqzdq2do7fd', //stylesheet location
+        accessToken: 'pk.eyJ1IjoicGlwZWxpbmVub3ciLCJhIjoiY2p6ZGFxbmJhMGVldjNqcWw2dXVhd3EwZSJ9.s3FmWGB5dlWJ2WRwGZL-kA',
+        center: [-81.3454415, 28.5657965], // starting position
+        zoom: 8 // starting zoom
+      });
+
+
+      // *** Full Screen Toggle
+      map.addControl(new mapboxgl.FullscreenControl());
+
+
+      // ***Add zoom and rotation controls to the map.
+      map.addControl(new mapboxgl.NavigationControl());
+
+
+      // *** Add geolocate control to the map.
+      map.addControl(
+        new mapboxgl.GeolocateControl({
+          positionOptions: {
+            enableHighAccuracy: true
+          },
+          trackUserLocation: true
+        })
+      );
+
+
+      $(document).ready(function() {
+        $.ajax({
+          type: "GET",
+          url: 'https://docs.google.com/spreadsheets/d/1kePeVBKAcOzKx7YKLNDsv6A9Mp5sRHaLiBrOrBTVC28/gviz/tq?tqx=out:csv&sheet=maplist',
+          dataType: "text",
+          success: function(csvData) {
+            makeGeoJSON(csvData);
+          }
+        });
+      });
+
+      function makeGeoJSON(csvData) {
+        console.log(csvData)
+        csv2geojson.csv2geojson(csvData, {
+          latfield: 'LATITUDE',
+          lonfield: 'LONGITUDE',
+          delimiter: ','
+        }, function(err, data) {
+          console.log(data)
+          map.on('load', function() {
+
+            map.addSource("locations", {
+              type: "geojson",
+              data: data,
+        
+            });
+
+
+            map.addLayer({
+              id: 'sites',
+              //type: 'symbol',
+              type: 'circle',
+              source: 'locations',
+              paint: {
+                'circle-radius': 7,
+                'circle-color': '#647aff',
+                'circle-stroke-color': 'white',
+                'circle-stroke-width': 1,
+                'circle-opacity': .8
+              }
+            });
+      
+
+            //toggle - add source and layer for contours
+            map.addSource('contours', {
+              type: 'vector',
+              url: 'mapbox://mapbox.mapbox-terrain-v2'
+            });
+            map.addLayer({
+              'id': 'contours',
+              'type': 'line',
+              'source': 'contours',
+              'source-layer': 'contour',
+              'layout': {
+                // make layer visible by default
+                'visibility': 'visible',
+                'line-join': 'round',
+                'line-cap': 'round'
+              },
+              'paint': {
+                'line-color': '#8B4513',
+                'line-width': 1
+              }
+            });
+
+
+            //toggle - enumerate ids of the layers
+            var toggleableLayerIds = ['contours', 'sites'];
+
+            //toggle - set up the corresponding toggle button for each layer
+            for (var i = 0; i < toggleableLayerIds.length; i++) {
+              var id = toggleableLayerIds[i];
+
+              var link = document.createElement('a');
+              link.href = '#';
+              link.className = 'active';
+              link.textContent = id;
+
+              link.onclick = function(e) {
+                var clickedLayer = this.textContent;
+                e.preventDefault();
+                e.stopPropagation();
+
+                var visibility = map.getLayoutProperty(clickedLayer, 'visibility');
+
+                //toggle layer visibility by changing the layout object's visibility property
+                if (visibility === 'visible') {
+                  map.setLayoutProperty(clickedLayer, 'visibility', 'none');
+                  this.className = '';
+                } else {
+                  this.className = 'active';
+                  map.setLayoutProperty(clickedLayer, 'visibility', 'visible');
+                }
+              };
+
+              var layers = document.getElementById('menu');
+              layers.appendChild(link);
+            }
+
+
+            //***new code block from Mal Wood-Santoro @ Mapbox support
+            map.on('click', 'sites', function(e) {
+              var coordinates = e.features[0].geometry.coordinates.slice();
+              // Property to display in popup 
+              var property = e.features[0].properties.PROPERTY;
+              var district = e.features[0].properties.DISTRICT;
+              var priority = e.features[0].properties.PRIORITY;
+              var location = e.features[0].properties.LOCATION;
+              var availability = e.features[0].properties.AVAILABILITY;
+              var description = e.features[0].properties.DESCRIPTION;
+              var pricing = e.features[0].properties.PRICING;
+              var details = e.features[0].properties.DETAILS;
+              var collateral_link_1 = e.features[0].properties.COLLATERAL_LINK_1;
+              var collateral_link_2 = e.features[0].properties.COLLATERAL_LINK_2;
+              var map_link = e.features[0].properties.MAP_LINK;
+              var streetview_link = e.features[0].properties.STREETVIEW_LINK;
+              var photo_link = e.features[0].properties.PHOTO_LINK;
+              var demographics = e.features[0].properties.DEMOGRAPHICS;
+              var traffic_counts = e.features[0].properties.TRAFFIC_COUNTS;
+              var sales_revenues = e.features[0].properties.SALES_REVENUES;
+              var g_place = e.features[0].properties.G_PLACES_LINK;
+              var icon = e.features[0].properties.ICON_LINK;
+              var logo = e.features[0].properties.LOGO_LINK;
+
+
+              new mapboxgl.Popup()
+                .setLngLat(coordinates)
+                .setHTML(
+                  `<style>th{text-align:left; vertical-align:top;}</style>
+                     <table style="width:100%">
+                       <tr><th colspan="5"><h3>` + property + `</h3></th></tr>
+                       <tr><th>DISTRICT</th><td colspan="3">` + district + `</td></tr>
+                       <tr><th>PRIORITY</th><td colspan="3">` + priority + `</td></tr>
+                       <tr><th>LOCATION</th><td colspan="3">` + location + `</td></tr>
+                       <tr><th>AVAILABILITY</th><td colspan="3">` + availability + `</td></tr>
+                       <tr><th>DESCRIPTION</th><td colspan="3">` + description + `</td></tr>
+                       <tr><th>PRICING</th><td colspan="3">` + pricing + `</td></tr>
+                       <tr><th>DETAILS</th><td colspan="3">` + details + `</td></tr>
+                       <tr><th>LINKS</th>
+                         <td><a href="` + collateral_link_1 + `" target="_blank">LINK1</a></td>
+                         <td><a href="` + collateral_link_2 + `" target="_blank">LINK2</a></td>
+                       </tr>
+                        <tr><td></td>
+                         <td><a href="` + map_link + `" target="_blank">GMAP</a></td>
+                         <td><a href="` + streetview_link + `" target="_blank">STREETVIEW</a></td>
+                       </tr>
+                       <tr><td></td>
+                         <td><a href="` + demographics + `" target="_blank">DEMOS</a></td>
+                         <td><a href="` + traffic_counts + `" target="_blank">TRAFFIC</a></td>
+                       </tr>
+                       <tr><td></td>
+                         <td><a href="` + sales_revenues + `" target="_blank">SALES</a></td>
+                         <td><a href="` + g_place + `" target="_blank">GPLACE</a></td>
+                       </tr>
+                       <tr><td colspan="5"><img src="` + photo_link + `" width="100%"></td></tr>
+                     </table>
+                 `)
+                .addTo(map);
+            });
+
+          });
+        });
+      }
+
+    </script>
+
+  </body>
+
+</html>
